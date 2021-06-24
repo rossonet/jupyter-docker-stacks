@@ -46,3 +46,5 @@ RUN mamba install --quiet --yes \
     mamba clean --all -f -y && \
     fix-permissions "${CONDA_DIR}" && \
     fix-permissions "/home/${NB_USER}"
+
+ENV JUPYTER_ENABLE_LAB=yes
