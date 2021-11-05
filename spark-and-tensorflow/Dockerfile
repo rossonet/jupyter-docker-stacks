@@ -16,7 +16,8 @@ RUN apt-get update --yes && \
     apt-get install --yes --no-install-recommends \
     fonts-dejavu \
     gfortran \
-    gcc && \
+    gcc \
+    libprotobuf-c-dev libprotobuf-c1 libprotobuf17 libprotobuf-dev && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 USER ${NB_UID}
@@ -27,6 +28,8 @@ RUN mamba install --quiet --yes \
     'r-ggplot2=3.3*' \
     'r-irkernel=1.2*' \
     'r-rcurl=1.98*' \
+    'tensorflow=2.6.0' \
+    'gym=0.19.0' \
     'r-sparklyr=1.7*' && \
     mamba clean --all -f -y && \
     fix-permissions "${CONDA_DIR}" && \
@@ -40,11 +43,8 @@ RUN mamba install --quiet --yes 'spylon-kernel=0.4*' && \
     fix-permissions "${CONDA_DIR}" && \
     fix-permissions "/home/${NB_USER}"
 
-# Install Tensorflow
-RUN mamba install --quiet --yes \
-    'tensorflow=2.4.1' && \
-    mamba clean --all -f -y && \
-    fix-permissions "${CONDA_DIR}" && \
-    fix-permissions "/home/${NB_USER}"
+# Install Torch and Torchvision
+RUN conda install -y pytorch torchvision torchaudio cpuonly -c pytorch && \
+conda install -y torchsummary -c daveeloo
 
 ENV JUPYTER_ENABLE_LAB=yes
