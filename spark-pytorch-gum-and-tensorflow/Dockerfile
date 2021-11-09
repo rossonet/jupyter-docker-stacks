@@ -17,6 +17,8 @@ RUN apt-get update --yes && \
     fonts-dejavu \
     gfortran \
     gcc \
+    cmake \
+    build-essential g++ \
     libprotobuf-c-dev libprotobuf-c1 libprotobuf17 libprotobuf-dev && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -45,6 +47,7 @@ RUN mamba install --quiet --yes 'spylon-kernel=0.4*' && \
 
 # Install Torch and Torchvision
 RUN conda install -y pytorch torchvision torchaudio cpuonly -c pytorch && \
-conda install -y torchsummary -c daveeloo
+conda install -y torchsummary -c daveeloo && \
+pip install gym[atari]
 
 ENV JUPYTER_ENABLE_LAB=yes
