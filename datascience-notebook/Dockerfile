@@ -1,11 +1,13 @@
 # Copyright (c) Jupyter Development Team.
 # Distributed under the terms of the Modified BSD License.
-ARG BASE_CONTAINER=jupyter/scipy-notebook
+ARG OWNER=jupyter
+ARG BASE_CONTAINER=$OWNER/scipy-notebook
 FROM $BASE_CONTAINER
 
 LABEL maintainer="Jupyter Project <jupyter@googlegroups.com>"
 
-# Fix DL4006
+# Fix: https://github.com/hadolint/hadolint/wiki/DL4006
+# Fix: https://github.com/koalaman/shellcheck/wiki/SC3014
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 USER root
@@ -14,9 +16,7 @@ USER root
 # Default values can be overridden at build time
 # (ARGS are in lower case to distinguish them from ENV)
 # Check https://julialang.org/downloads/
-ARG julia_version="1.6.1"
-# SHA256 checksum
-ARG julia_checksum="7c888adec3ea42afbfed2ce756ce1164a570d50fa7506c3f2e1e2cbc49d52506"
+ARG julia_version="1.8.2"
 
 # R pre-requisites
 RUN apt-get update --yes && \
@@ -35,11 +35,18 @@ ENV JULIA_DEPOT_PATH=/opt/julia \
 WORKDIR /tmp
 
 # hadolint ignore=SC2046
-RUN mkdir "/opt/julia-${JULIA_VERSION}" && \
-    wget -q https://julialang-s3.julialang.org/bin/linux/x64/$(echo "${JULIA_VERSION}" | cut -d. -f 1,2)"/julia-${JULIA_VERSION}-linux-x86_64.tar.gz" && \
-    echo "${julia_checksum} *julia-${JULIA_VERSION}-linux-x86_64.tar.gz" | sha256sum -c - && \
-    tar xzf "julia-${JULIA_VERSION}-linux-x86_64.tar.gz" -C "/opt/julia-${JULIA_VERSION}" --strip-components=1 && \
-    rm "/tmp/julia-${JULIA_VERSION}-linux-x86_64.tar.gz" && \
+RUN set -x && \
+    julia_arch=$(uname -m) && \
+    julia_short_arch="${julia_arch}" && \
+    if [ "${julia_short_arch}" == "x86_64" ]; then \
+      julia_short_arch="x64"; \
+    fi; \
+    julia_installer="julia-${JULIA_VERSION}-linux-${julia_arch}.tar.gz" && \
+    julia_major_minor=$(echo "${JULIA_VERSION}" | cut -d. -f 1,2) && \
+    mkdir "/opt/julia-${JULIA_VERSION}" && \
+    wget -q "https://julialang-s3.julialang.org/bin/linux/${julia_short_arch}/${julia_major_minor}/${julia_installer}" && \
+    tar xzf "${julia_installer}" -C "/opt/julia-${JULIA_VERSION}" --strip-components=1 && \
+    rm "${julia_installer}" && \
     ln -fs /opt/julia-*/bin/julia /usr/local/bin/julia
 
 # Show Julia where conda libraries are \
@@ -53,30 +60,42 @@ RUN mkdir /etc/julia && \
 USER ${NB_UID}
 
 # R packages including IRKernel which gets installed globally.
-RUN conda install --quiet --yes \
-    'r-base=4.1.0' \
-    'r-caret=6.0*' \
-    'r-crayon=1.4*' \
-    'r-devtools=2.4*' \
-    'r-forecast=8.15*' \
-    'r-hexbin=1.28*' \
-    'r-htmltools=0.5*' \
-    'r-htmlwidgets=1.5*' \
-    'r-irkernel=1.2*' \
-    'r-nycflights13=1.0*' \
-    'r-randomforest=4.6*' \
-    'r-rcurl=1.98*' \
-    'r-rmarkdown=2.9*' \
-    'r-rodbc=1.3*' \
-    'r-rsqlite=2.2*' \
-    'r-shiny=1.6*' \
-    'r-tidymodels=0.1*' \
-    'r-tidyverse=1.3*' \
-    'rpy2=3.4*' \
-    'unixodbc=2.3.*' && \
-    conda clean --all -f -y && \
+# r-e1071: dependency of the caret R package
+RUN mamba install --quiet --yes \
+    'r-base' \
+    'r-caret' \
+    'r-crayon' \
+    'r-devtools' \
+    'r-e1071' \
+    'r-forecast' \
+    'r-hexbin' \
+    'r-htmltools' \
+    'r-htmlwidgets' \
+    'r-irkernel' \
+    'r-nycflights13' \
+    'r-randomforest' \
+    'r-rcurl' \
+    'r-rmarkdown' \
+    'r-rodbc' \
+    'r-rsqlite' \
+    'r-shiny' \
+    'r-tidyverse' \
+    'unixodbc' && \
+    mamba clean --all -f -y && \
     fix-permissions "${CONDA_DIR}" && \
     fix-permissions "/home/${NB_USER}"
+
+# `rpy2` and `r-tidymodels` are not easy to install under aarch64
+RUN set -x && \
+    arch=$(uname -m) && \
+    if [ "${arch}" == "x86_64" ]; then \
+        mamba install --quiet --yes \
+            'rpy2' \
+            'r-tidymodels' && \
+            mamba clean --all -f -y && \
+            fix-permissions "${CONDA_DIR}" && \
+            fix-permissions "/home/${NB_USER}"; \
+    fi;
 
 # Add Julia packages.
 # Install IJulia as jovyan and then move the kernelspec out

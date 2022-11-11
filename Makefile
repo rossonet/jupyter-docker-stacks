@@ -7,7 +7,9 @@ SHELL:=bash
 OWNER?=jupyter
 
 # Need to list the images in build dependency order
-ALL_IMAGES:=base-notebook \
+# All of the images
+ALL_IMAGES:= \
+	base-notebook \
 	minimal-notebook \
 	r-notebook \
 	scipy-notebook \
@@ -16,8 +18,19 @@ ALL_IMAGES:=base-notebook \
 	pyspark-notebook \
 	all-spark-notebook
 
+AARCH64_IMAGES:= \
+	base-notebook \
+	minimal-notebook \
+	r-notebook \
+	scipy-notebook \
+	datascience-notebook \
+	pyspark-notebook \
+	all-spark-notebook
+
 # Enable BuildKit for Docker build
 export DOCKER_BUILDKIT:=1
+
+
 
 # https://marmelab.com/blog/2016/02/29/auto-documented-makefile.html
 help:
@@ -27,107 +40,88 @@ help:
 	@echo
 	@grep -E '^[a-zA-Z0-9_%/-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
-build/%: DARGS?=
-build/%: ## build the latest image for a stack
-	docker build $(DARGS) --rm --force-rm -t $(OWNER)/$(notdir $@):latest ./$(notdir $@)
+
+
+build/%: DOCKER_BUILD_ARGS?=
+build/%: ## build the latest image for a stack using the system's architecture
+	docker build $(DOCKER_BUILD_ARGS) --rm --force-rm -t $(OWNER)/$(notdir $@):latest ./$(notdir $@) --build-arg OWNER=$(OWNER)
 	@echo -n "Built image size: "
 	@docker images $(OWNER)/$(notdir $@):latest --format "{{.Size}}"
+build-all: $(foreach I, $(ALL_IMAGES), build/$(I)) ## build all stacks
+build-aarch64: $(foreach I, $(AARCH64_IMAGES), build/$(I)) ## build aarch64 stacks
 
-build-all: $(foreach I,$(ALL_IMAGES), build/$(I) ) ## build all stacks
-build-test-all: $(foreach I,$(ALL_IMAGES), build/$(I) test/$(I) ) ## build and test all stacks
 
-check-outdated/%: ## check the outdated conda packages in a stack and produce a report (experimental)
-	@TEST_IMAGE="$(OWNER)/$(notdir $@)" pytest test/test_outdated.py
-check-outdated-all: $(foreach I,$(ALL_IMAGES), check-outdated/$(I) ) ## check all the stacks for outdated conda packages
+check-outdated/%: ## check the outdated mamba/conda packages in a stack and produce a report (experimental)
+	@TEST_IMAGE="$(OWNER)/$(notdir $@)" pytest tests/base-notebook/test_outdated.py
+check-outdated-all: $(foreach I, $(ALL_IMAGES), check-outdated/$(I)) ## check all the stacks for outdated packages
+
+
 
 cont-clean-all: cont-stop-all cont-rm-all ## clean all containers (stop + rm)
-
 cont-stop-all: ## stop all containers
 	@echo "Stopping all containers ..."
 	-docker stop -t0 $(shell docker ps -a -q) 2> /dev/null
-
 cont-rm-all: ## remove all containers
 	@echo "Removing all containers ..."
 	-docker rm --force $(shell docker ps -a -q) 2> /dev/null
 
-dev/%: ARGS?=
-dev/%: DARGS?=-e JUPYTER_ENABLE_LAB=yes
-dev/%: PORT?=8888
-dev/%: ## run a foreground container for a stack
-	docker run -it --rm -p $(PORT):8888 $(DARGS) $(OWNER)/$(notdir $@) $(ARGS)
 
-dev-env: ## install libraries required to build docs and run tests
-	@pip install -r requirements-dev.txt
 
 docs: ## build HTML documentation
-	sphinx-build docs/ docs/_build/
+	sphinx-build -W --keep-going --color docs/ docs/_build/
 
-git-commit: LOCAL_PATH?=.
-git-commit: GITHUB_SHA?=$(shell git rev-parse HEAD)
-git-commit: GITHUB_REPOSITORY?=jupyter/docker-stacks
-git-commit: GITHUB_TOKEN?=
-git-commit: ## commit outstading git changes and push to remote
-	@git config --global user.name "GitHub Actions"
-	@git config --global user.email "actions@users.noreply.github.com"
+linkcheck-docs: ## check broken links
+	sphinx-build -W --keep-going --color -b linkcheck docs/ docs/_build/
 
-	@echo "Publishing outstanding changes in $(LOCAL_PATH) to $(GITHUB_REPOSITORY)"
-	@cd $(LOCAL_PATH) && \
-		git remote add publisher https://$(GITHUB_TOKEN)@github.com/$(GITHUB_REPOSITORY).git && \
-		git checkout master && \
-		git add -A -- . && \
-		git commit -m "[ci skip] Automated publish for $(GITHUB_SHA)" || exit 0
-	@cd $(LOCAL_PATH) && git push -u publisher master
 
-hook/%: WIKI_PATH?=../wiki
+
 hook/%: ## run post-build hooks for an image
 	python3 -m tagging.tag_image --short-image-name "$(notdir $@)" --owner "$(OWNER)" && \
-	python3 -m tagging.create_manifests --short-image-name "$(notdir $@)" --owner "$(OWNER)" --wiki-path "$(WIKI_PATH)"
+	python3 -m tagging.write_manifest --short-image-name "$(notdir $@)" --hist-line-dir /tmp/hist_lines/ --manifest-dir /tmp/manifests/ --owner "$(OWNER)"
+hook-all: $(foreach I, $(ALL_IMAGES), hook/$(I)) ## run post-build hooks for all images
 
-hook-all: $(foreach I,$(ALL_IMAGES),hook/$(I) ) ## run post-build hooks for all images
+
 
 img-clean: img-rm-dang img-rm ## clean dangling and jupyter images
-
 img-list: ## list jupyter images
 	@echo "Listing $(OWNER) images ..."
 	docker images "$(OWNER)/*"
-
 img-rm: ## remove jupyter images
 	@echo "Removing $(OWNER) images ..."
 	-docker rmi --force $(shell docker images --quiet "$(OWNER)/*") 2> /dev/null
-
 img-rm-dang: ## remove dangling images (tagged None)
 	@echo "Removing dangling images ..."
 	-docker rmi --force $(shell docker images -f "dangling=true" -q) 2> /dev/null
 
-pre-commit-all: ## run pre-commit hook on all files
-	@pre-commit run --all-files || (printf "\n\n\n" && git --no-pager diff --color=always)
 
+
+pre-commit-all: ## run pre-commit hook on all files
+	@pre-commit run --all-files --hook-stage manual
 pre-commit-install: ## set up the git hook scripts
 	@pre-commit --version
 	@pre-commit install
 
-pull/%: DARGS?=
+
+
 pull/%: ## pull a jupyter image
-	docker pull $(DARGS) $(OWNER)/$(notdir $@)
+	docker pull $(OWNER)/$(notdir $@)
+pull-all: $(foreach I, $(ALL_IMAGES), pull/$(I)) ## pull all images
 
-pull-all: $(foreach I,$(ALL_IMAGES),pull/$(I) ) ## pull all images
 
-push/%: DARGS?=
 push/%: ## push all tags for a jupyter image
-	docker push --all-tags $(DARGS) $(OWNER)/$(notdir $@)
+	docker push --all-tags $(OWNER)/$(notdir $@)
+push-all: $(foreach I, $(ALL_IMAGES), push/$(I)) ## push all tagged images
 
-push-all: $(foreach I,$(ALL_IMAGES),push/$(I) ) ## push all tagged images
 
-run/%: DARGS?=
-run/%: ## run a bash in interactive mode in a stack
-	docker run -it --rm $(DARGS) $(OWNER)/$(notdir $@) $(SHELL)
 
-run-sudo/%: DARGS?=
-run-sudo/%: ## run a bash in interactive mode as root in a stack
-	docker run -it --rm -u root $(DARGS) $(OWNER)/$(notdir $@) $(SHELL)
+run-shell/%: ## run a bash in interactive mode in a stack
+	docker run -it --rm $(OWNER)/$(notdir $@) $(SHELL)
 
-test/%: ## run tests against a stack (only common tests or common tests + specific tests)
-	@if [ ! -d "$(notdir $@)/test" ]; then TEST_IMAGE="$(OWNER)/$(notdir $@)" pytest -m "not info" test; \
-	else TEST_IMAGE="$(OWNER)/$(notdir $@)" pytest -m "not info" test $(notdir $@)/test; fi
+run-sudo-shell/%: ## run a bash in interactive mode as root in a stack
+	docker run -it --rm --user root $(OWNER)/$(notdir $@) $(SHELL)
 
-test-all: $(foreach I,$(ALL_IMAGES),test/$(I)) ## test all stacks
+
+
+test/%: ## run tests against a stack
+	python3 -m tests.run_tests --short-image-name "$(notdir $@)" --owner "$(OWNER)"
+test-all: $(foreach I, $(ALL_IMAGES), test/$(I)) ## test all stacks
