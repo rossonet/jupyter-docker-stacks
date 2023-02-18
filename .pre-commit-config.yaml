@@ -14,21 +14,21 @@
 repos:
   # Autoupdate: Python code
   - repo: https://github.com/asottile/pyupgrade
-    rev: v3.2.2
+    rev: v3.3.1
     hooks:
       - id: pyupgrade
         args: [--py39-plus]
 
   # Automatically sort python imports
   - repo: https://github.com/pycqa/isort
-    rev: 5.10.1
+    rev: 5.12.0
     hooks:
       - id: isort
         args: [--profile, black]
 
   # Autoformat: Python code
   - repo: https://github.com/psf/black
-    rev: 22.10.0
+    rev: 23.1.0
     hooks:
       - id: black
         args: [--target-version=py39]
@@ -58,7 +58,7 @@ repos:
 
   # `pre-commit sample-config` default hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.3.0
+    rev: v4.4.0
     hooks:
       - id: check-added-large-files
       - id: end-of-file-fixer
@@ -74,7 +74,7 @@ repos:
 
   # Lint: YAML
   - repo: https://github.com/adrienverge/yamllint.git
-    rev: v1.28.0
+    rev: v1.29.0
     hooks:
       - id: yamllint
         args: ["-d {extends: relaxed, rules: {line-length: disable}}", "-s"]
@@ -89,20 +89,20 @@ repos:
 
   # Lint: Shell scripts
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.8.0.4
+    rev: v0.9.0.2
     hooks:
       - id: shellcheck
         args: ["-x"]
 
   # Lint: Python
   - repo: https://github.com/PyCQA/flake8
-    rev: 5.0.4
+    rev: 6.0.0
     hooks:
       - id: flake8
 
   # Lint: Markdown
   - repo: https://github.com/igorshubovych/markdownlint-cli
-    rev: v0.32.2
+    rev: v0.33.0
     hooks:
       - id: markdownlint
         args: ["--fix"]
@@ -116,7 +116,7 @@ repos:
   # nbQA provides tools from the Python ecosystem like
   # pyupgrade, isort, black, and flake8, adjusted for notebooks.
   - repo: https://github.com/nbQA-dev/nbQA
-    rev: 1.5.3
+    rev: 1.6.1
     hooks:
       - id: nbqa-pyupgrade
         args: [--py39-plus]
@@ -127,7 +127,7 @@ repos:
 
   # Run black on python code blocks in documentation files.
   - repo: https://github.com/asottile/blacken-docs
-    rev: v1.12.1
+    rev: 1.13.0
     hooks:
       - id: blacken-docs
         # --skip-errors is added to allow us to have python syntax highlighting even if
@@ -136,7 +136,9 @@ repos:
         # feature request about this.
         args: [--target-version=py39, --skip-errors]
 
-# Docker hooks do not work in pre-commit.ci
-# See: <https://github.com/pre-commit-ci/issues/issues/11>
+# pre-commit.ci config reference: https://pre-commit.ci/#configuration
 ci:
+  autoupdate_schedule: monthly
+  # Docker hooks do not work in pre-commit.ci
+  # See: <https://github.com/pre-commit-ci/issues/issues/11>
   skip: [hadolint-docker]

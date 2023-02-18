@@ -16,7 +16,7 @@ USER root
 # Default values can be overridden at build time
 # (ARGS are in lower case to distinguish them from ENV)
 # Check https://julialang.org/downloads/
-ARG julia_version="1.8.3"
+ARG julia_version="1.8.5"
 
 # R pre-requisites
 RUN apt-get update --yes && \
@@ -79,23 +79,13 @@ RUN mamba install --quiet --yes \
     'r-rodbc' \
     'r-rsqlite' \
     'r-shiny' \
+    'r-tidymodels' \
     'r-tidyverse' \
+    'rpy2' \
     'unixodbc' && \
     mamba clean --all -f -y && \
     fix-permissions "${CONDA_DIR}" && \
     fix-permissions "/home/${NB_USER}"
-
-# `rpy2` and `r-tidymodels` are not easy to install under aarch64
-RUN set -x && \
-    arch=$(uname -m) && \
-    if [ "${arch}" == "x86_64" ]; then \
-        mamba install --quiet --yes \
-            'rpy2' \
-            'r-tidymodels' && \
-            mamba clean --all -f -y && \
-            fix-permissions "${CONDA_DIR}" && \
-            fix-permissions "/home/${NB_USER}"; \
-    fi;
 
 # Add Julia packages.
 # Install IJulia as jovyan and then move the kernelspec out
